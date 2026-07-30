@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Collaborative Editor</title>
+
+    <!-- Tailwind CSS for layout styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Include stylesheet (From your base code) -->
+    <link
+      href="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.snow.css"
+      rel="stylesheet"
+    />
+
+    <style>
+      body {
+        font-family: "Inter", sans-serif;
+        background-color: #f8f9fa; /* Light grey background similar to Google Docs */
+      }
+
+      /* Making Quill look more like a standard document page */
+      .ql-toolbar.ql-snow {
+        border: none !important;
+        border-bottom: 1px solid #e2e8f0 !important;
+        background: #ffffff;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        padding: 12px;
+        box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+      }
+      .ql-container.ql-snow {
+        border: none !important;
+      }
+      .ql-editor {
+        min-height: 800px;
+        background-color: white;
+        box-shadow:
+          0 4px 6px -1px rgba(0, 0, 0, 0.1),
+          0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        margin: 20px auto;
+        max-w: 8.5in; /* Standard letter width approximation */
+        padding: 1in; /* Standard margins */
+      }
+    </style>
+  </head>
+  <body class="min-h-screen flex flex-col">
+    <!-- Header Area -->
+    <header
+      class="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between"
+    >
+      <div class="flex items-center gap-3">
+        <!-- Icon -->
+        <div
+          class="w-8 h-8 bg-blue-600 rounded text-white flex items-center justify-center font-bold text-xl"
+        >
+          ≡
+        </div>
+        <div>
+          <h1 class="text-lg font-semibold text-gray-800 leading-tight">
+            Untitled Document
+          </h1>
+          <div class="flex items-center gap-2 text-xs text-gray-500">
+            <span>
+              Room:
+              <span
+                id="room-id"
+                class="font-mono bg-gray-100 px-1 rounded text-blue-600"
+              >
+                ...
+              </span>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Connection Status -->
+      <div class="flex items-center gap-2">
+        <span class="relative flex h-3 w-3">
+          <span
+            id="status-ping"
+            class="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"
+          ></span>
+          <span
+            id="status-dot"
+            class="relative inline-flex rounded-full h-3 w-3 bg-yellow-500"
+          ></span>
+        </span>
+        <span id="status-text" class="text-sm font-medium text-gray-600">
+          Connecting...
+        </span>
+      </div>
+    </header>
+
+    <!-- Main Editor Area -->
+    <main class="flex-grow overflow-y-auto bg-[#f8f9fa] pb-10">
+      <div class="max-w-4xl mx-auto">
+        <!-- Create the editor container (From your base code) -->
+        <div id="editor">
+          <p>Hello World!</p>
+          <p>
+            Some initial
+            <strong>bold</strong>
+            text
+          </p>
+          <p><br /></p>
+        </div>
+      </div>
+    </main>
+
+    <!-- Include the Quill library (From your base code) -->
+    <script src="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.js"></script>
+
+    <!-- Initialize Quill editor and WebSockets -->
+    <script>
+      // 1. Initialize Quill editor (From your base code)
+      const quill = new Quill("#editor", {
+        theme: "snow",
+        placeholder: "Type something awesome...",
+      });
+
+      // 2. Setup Document/Room ID
+      // Grabs the last part of the URL (e.g., /doc/123 -> '123')
+      const pathParts = window.location.pathname.split("/");
+      const docId = pathParts[pathParts.length - 1] || "default-room";
+      document.getElementById("room-id").textContent = docId;
+
+      // 3. UI Status Elements
+      const statusText = document.getElementById("status-text");
+      const statusDot = document.getElementById("status-dot");
+      const statusPing = document.getElementById("status-ping");
+
+      // Prevent typing until connected so users don't desync immediately
+      quill.disable();
+
+      // 4. Connect to FastAPI WebSocket
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      // Connects to the route we set up in main.py: @app.websocket("/ws/{doc_id}")
+      const wsUrl = `${protocol}//${window.location.host}/ws/${docId}`;
+      const ws = new WebSocket(wsUrl);
+
+      // --- WEBSOCKET EVENT LISTENERS ---
+
+      ws.onopen = () => {
+        console.log("WebSocket connected!");
+        statusText.textContent = "Saved to server";
+        statusDot.classList.replace("bg-yellow-500", "bg-green-500");
+        statusPing.classList.replace("bg-yellow-400", "bg-green-400");
+
+        // Allow typing now that we are connected
+        quill.enable();
+      };
+
+      ws.onclose = () => {
+        console.log("WebSocket disconnected.");
+        statusText.textContent = "Offline";
+        statusDot.classList.replace("bg-green-500", "bg-red-500");
+        statusPing.classList.add("hidden"); // Stop the ping animation
+
+        // Stop typing so they don't lose data while disconnected
+        quill.disable();
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          // The server sends us a stringified JSON object (a Quill Delta)
+          const incomingDelta = JSON.parse(event.data);
+
+          // apply it to our local editor.
+          // CRITICAL: We use 'api' as the source. This ensures we don't trigger
+          // our own 'text-change' event and send the update back to the server.
+          quill.updateContents(incomingDelta, "api");
+        } catch (error) {
+          console.error("Error processing incoming message:", error);
+        }
+      };
+
+      // --- QUILL EVENT LISTENERS ---
+
+      // Listen for when THIS user types something
+      quill.on("text-change", (delta, oldDelta, source) => {
+        // Only broadcast if the change was made by the human user ('user').
+        // If the change came from the WebSocket, the source will be 'api'.
+        if (source === "user") {
+          // Show a quick "Saving..." indicator
+          statusText.textContent = "Saving...";
+
+          // Send the exact changes (delta) to the backend as a JSON string
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify(delta));
+          }
+
+          // Reset text back to "Saved" after a brief moment
+          setTimeout(() => {
+            if (ws.readyState === WebSocket.OPEN) {
+              statusText.textContent = "Saved to server";
+            }
+          }, 500);
+        }
+      });
+    </script>
+  </body>
+</html>
