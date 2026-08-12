@@ -171,6 +171,7 @@
         try {
           // The server sends us a stringified JSON object (a Quill Delta)
           const incomingDelta = JSON.parse(event.data);
+          console.log("Received delta from server:", incomingDelta);
 
           // apply it to our local editor.
           // CRITICAL: We use 'api' as the source. This ensures we don't trigger
@@ -194,6 +195,7 @@
           // Send the exact changes (delta) to the backend as a JSON string
           if (ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify(delta));
+            console.log("Sent delta to server:", delta);
           }
 
           // Reset text back to "Saved" after a brief moment
