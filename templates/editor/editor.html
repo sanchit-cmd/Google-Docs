@@ -256,13 +256,59 @@
       const docId = pathParts[pathParts.length - 1] || "default-room";
       document.getElementById("room-id").textContent = docId;
 
-      // Save to recent rooms history
+      // Helper to maintain recent rooms with document title
+      function updateRecentRooms(id, title) {
+        try {
+          let recents = JSON.parse(localStorage.getItem("recent_rooms") || "[]");
+          recents = recents.map((item) =>
+            typeof item === "string" ? { id: item, title: "Untitled Document" } : item
+          );
+
+          let existing = recents.find((item) => item.id === id);
+          if (existing) {
+            if (title && title.trim()) {
+              const cleanTitle = title.trim();
+              if (
+                cleanTitle !== "Untitled Document" ||
+                !existing.title ||
+                existing.title === "Untitled Document"
+              ) {
+                existing.title = cleanTitle;
+              }
+            }
+            existing.timestamp = Date.now();
+            recents = recents.filter((item) => item.id !== id);
+            recents.unshift(existing);
+          } else {
+            recents.unshift({
+              id: id,
+              title: title && title.trim() ? title.trim() : "Untitled Document",
+              timestamp: Date.now(),
+            });
+          }
+          if (recents.length > 9) recents.pop();
+          localStorage.setItem("recent_rooms", JSON.stringify(recents));
+        } catch (e) {}
+      }
+
+      // Pre-populate title from localStorage if previously visited
       try {
         let recents = JSON.parse(localStorage.getItem("recent_rooms") || "[]");
-        recents = recents.filter(id => id !== docId);
-        recents.unshift(docId);
-        if (recents.length > 6) recents.pop();
-        localStorage.setItem("recent_rooms", JSON.stringify(recents));
+        let existing = recents.find(
+          (item) => (typeof item === "string" ? item : item.id) === docId
+        );
+        if (
+          existing &&
+          typeof existing !== "string" &&
+          existing.title &&
+          existing.title !== "Untitled Document"
+        ) {
+          const titleInput = document.getElementById("doc-title");
+          if (titleInput) {
+            titleInput.value = existing.title;
+            document.title = `${existing.title} - Docs Collab`;
+          }
+        }
       } catch (e) {}
 
       // 4. UI Status & Title Elements
@@ -309,6 +355,7 @@
             if (payload.title && docTitleInput) {
               docTitleInput.value = payload.title;
               document.title = `${payload.title} - Docs Collab`;
+              updateRecentRooms(docId, payload.title);
             }
             if (payload.content && payload.content.ops && payload.content.ops.length > 0) {
               quill.setContents(payload.content, "silent");
@@ -321,6 +368,7 @@
             if (docTitleInput) {
               docTitleInput.value = payload.title;
               document.title = `${payload.title || "Untitled Document"} - Docs Collab`;
+              updateRecentRooms(docId, payload.title);
             }
             return;
           }
@@ -344,6 +392,7 @@
           const newTitle = e.target.value;
           document.title = `${newTitle || "Untitled Document"} - Docs Collab`;
           statusText.textContent = "Saving...";
+          updateRecentRooms(docId, newTitle);
 
           if (ws.readyState === WebSocket.OPEN) {
             ws.send(

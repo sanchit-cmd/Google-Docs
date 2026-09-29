@@ -11,6 +11,44 @@ router = APIRouter()
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 
+@router.get("/api/metadata")
+async def get_documents_metadata(
+    ids: str = "", current_user=Depends(get_current_user)
+):
+    """
+    Returns document metadata (title) for a comma-separated list of doc_ids.
+    Checks Redis hot cache first, then falls back to MongoDB.
+    """
+    doc_ids = [i.strip() for i in ids.split(",") if i.strip()]
+    if not doc_ids:
+        return {}
+
+    result = {}
+    import main
+    from services.mongo import get_document
+
+    for doc_id in doc_ids:
+        title = None
+        if main.redis_client:
+            try:
+                title = await main.redis_client.get(f"doc:{doc_id}:title")
+            except Exception:
+                pass
+
+        if not title:
+            try:
+                doc = await get_document(doc_id)
+                if doc:
+                    title = doc.get("title")
+            except Exception:
+                pass
+
+        if title:
+            result[doc_id] = {"title": title}
+
+    return result
+
+
 @router.get("/{doc_id}", response_class=HTMLResponse)
 async def get_editor(
     request: Request, doc_id: str, current_user=Depends(get_current_user)
