@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Editor - Docs Collab</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Quill Stylesheet -->
+    <link
+      href="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.snow.css"
+      rel="stylesheet"
+    />
+
+    <style>
+      body {
+        font-family: "Inter", sans-serif;
+        background-color: #f0f4f9;
+      }
+
+      /* Clean Google Docs Toolbar Styling */
+      .ql-toolbar.ql-snow {
+        border: none !important;
+        background: transparent !important;
+        padding: 0 !important;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 2px;
+      }
+
+      .ql-toolbar.ql-snow .ql-formats {
+        margin-right: 8px !important;
+        display: inline-flex;
+        align-items: center;
+      }
+
+      .ql-snow .ql-picker-label {
+        font-size: 13px;
+        color: #4b5563;
+      }
+
+      /* Document Sheet Styling */
+      .ql-container.ql-snow {
+        border: none !important;
+        font-family: "Inter", sans-serif;
+        font-size: 15px;
+        height: auto;
+      }
+
+      .ql-editor {
+        padding: 0 !important;
+        min-height: 900px;
+        line-height: 1.75;
+        color: #1f2937;
+        word-break: break-word;
+        overflow-wrap: break-word;
+        white-space: pre-wrap;
+      }
+
+      .ql-editor:focus {
+        outline: none;
+      }
+
+      .ql-editor.ql-blank::before {
+        left: 0 !important;
+        right: 0 !important;
+        color: #9ca3af !important;
+        font-style: normal !important;
+      }
+    </style>
+  </head>
+  <body class="min-h-screen flex flex-col bg-[#f0f4f9]">
+    
+    <!-- 1. Top Navigation Bar -->
+    <header class="bg-white border-b border-gray-200 px-5 py-2.5 flex items-center justify-between sticky top-0 z-30 shadow-xs">
+      <!-- Left: Logo & Document Title -->
+      <div class="flex items-center gap-3">
+        <a
+          href="/editor"
+          title="Back to Documents Hub"
+          class="w-9 h-9 bg-blue-600 hover:bg-blue-700 rounded-xl text-white flex items-center justify-center font-bold text-xl shadow-sm transition"
+        >
+          ≡
+        </a>
+        <div>
+          <div class="flex items-center gap-2">
+            <input
+              type="text"
+              id="doc-title"
+              value="Untitled Document"
+              class="text-base font-bold text-gray-800 border border-transparent hover:border-gray-300 focus:border-blue-500 rounded px-1.5 py-0.5 outline-none transition bg-transparent"
+            />
+          </div>
+          <div class="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
+            <a href="/editor" class="hover:text-blue-600 transition flex items-center gap-1 font-medium">
+              <span>← Documents</span>
+            </a>
+            <span>&bull;</span>
+            <span class="flex items-center gap-1">
+              Room:
+              <button
+                type="button"
+                onclick="copyRoomLink()"
+                class="font-mono bg-blue-50 hover:bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded transition text-[11px] font-semibold"
+                title="Click to copy room link"
+              >
+                <span id="room-id">{{ doc_id }}</span>
+              </button>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: Status, Share, User Profile -->
+      <div class="flex items-center gap-3">
+        <!-- Live Connection Indicator -->
+        <div class="flex items-center gap-2 bg-gray-50 border border-gray-200/80 px-3 py-1.5 rounded-full text-xs">
+          <span class="relative flex h-2.5 w-2.5">
+            <span
+              id="status-ping"
+              class="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"
+            ></span>
+            <span
+              id="status-dot"
+              class="relative inline-flex rounded-full h-2.5 w-2.5 bg-yellow-500"
+            ></span>
+          </span>
+          <span id="status-text" class="text-xs font-medium text-gray-600">
+            Connecting...
+          </span>
+        </div>
+
+        <!-- Share Button -->
+        <button
+          type="button"
+          id="share-btn"
+          onclick="copyRoomLink()"
+          class="flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl text-xs font-semibold transition shadow-sm"
+        >
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+          </svg>
+          <span id="share-text">Share</span>
+        </button>
+
+        <!-- User Profile Pill -->
+        <div class="flex items-center gap-2 pl-2 border-l border-gray-200">
+          <div
+            class="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-xs uppercase shadow-sm"
+            title="{{ user.name if user and user.name else 'User' }} (@{{ user.username if user and user.username else 'user' }})"
+          >
+            {{ user.name[0] if user and user.name else 'U' }}
+          </div>
+          <a
+            href="/auth/logout"
+            class="text-xs font-medium text-gray-500 hover:text-red-600 transition ml-1"
+            title="Sign out"
+          >
+            Sign Out
+          </a>
+        </div>
+      </div>
+    </header>
+
+    <!-- 2. Sticky Formatting Toolbar (Separate from writing area) -->
+    <div class="bg-white/95 backdrop-blur-md border-b border-gray-200 sticky top-[57px] z-20 py-2 px-4 shadow-xs">
+      <div class="max-w-4xl mx-auto flex items-center justify-center">
+        <!-- Quill Toolbar Target -->
+        <div id="toolbar-container" class="bg-gray-50/80 border border-gray-200 rounded-full px-4 py-1 flex items-center justify-center shadow-xs">
+          <!-- Standard Quill Controls -->
+          <span class="ql-formats">
+            <select class="ql-header">
+              <option value="1">Heading 1</option>
+              <option value="2">Heading 2</option>
+              <option value="3">Heading 3</option>
+              <option selected>Normal</option>
+            </select>
+          </span>
+          <span class="ql-formats">
+            <button class="ql-bold" title="Bold"></button>
+            <button class="ql-italic" title="Italic"></button>
+            <button class="ql-underline" title="Underline"></button>
+            <button class="ql-strike" title="Strike"></button>
+          </span>
+          <span class="ql-formats">
+            <select class="ql-color" title="Text Color"></select>
+            <select class="ql-background" title="Highlight Color"></select>
+          </span>
+          <span class="ql-formats">
+            <button class="ql-list" value="ordered" title="Numbered List"></button>
+            <button class="ql-list" value="bullet" title="Bulleted List"></button>
+          </span>
+          <span class="ql-formats">
+            <select class="ql-align" title="Alignment"></select>
+          </span>
+          <span class="ql-formats">
+            <button class="ql-blockquote" title="Quote"></button>
+            <button class="ql-code-block" title="Code Block"></button>
+            <button class="ql-link" title="Insert Link"></button>
+            <button class="ql-clean" title="Clear Formatting"></button>
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. Document Workspace Area -->
+    <main class="flex-grow py-8 px-4 flex justify-center overflow-y-auto">
+      <div class="w-full max-w-[850px] pb-24">
+        <!-- Physical Document Sheet -->
+        <div class="bg-white rounded-sm shadow-md border border-gray-200/80 min-h-[1056px] p-10 sm:p-16 transition-shadow">
+          <div id="editor"></div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Toast Notification for Link Copy -->
+    <div
+      id="toast"
+      class="fixed bottom-6 right-6 bg-gray-900 text-white px-4 py-2.5 rounded-xl text-xs font-medium shadow-2xl opacity-0 pointer-events-none transition-opacity duration-200 flex items-center gap-2 z-50"
+    >
+      <svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+      </svg>
+      <span>Share link copied to clipboard!</span>
+    </div>
+
+    <!-- Include Quill library -->
+    <script src="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.js"></script>
+
+    <!-- Real-time Collaboration Engine -->
+    <script>
+      // 1. Initialize Quill Editor with Custom Separated Toolbar
+      const quill = new Quill("#editor", {
+        theme: "snow",
+        placeholder: "Start typing your collaborative document...",
+        modules: {
+          toolbar: "#toolbar-container",
+        },
+      });
+
+      // 2. Generate unique client session ID
+      const clientId =
+        window.crypto && crypto.randomUUID
+          ? crypto.randomUUID()
+          : "client-" + Math.random().toString(36).substring(2, 10);
+
+      // 3. Extract Document ID
+      const pathParts = window.location.pathname.split("/");
+      const docId = pathParts[pathParts.length - 1] || "default-room";
+      document.getElementById("room-id").textContent = docId;
+
+      // Save to recent rooms history
+      try {
+        let recents = JSON.parse(localStorage.getItem("recent_rooms") || "[]");
+        recents = recents.filter(id => id !== docId);
+        recents.unshift(docId);
+        if (recents.length > 6) recents.pop();
+        localStorage.setItem("recent_rooms", JSON.stringify(recents));
+      } catch (e) {}
+
+      // 4. UI Status & Title Elements
+      const statusText = document.getElementById("status-text");
+      const statusDot = document.getElementById("status-dot");
+      const statusPing = document.getElementById("status-ping");
+      const docTitleInput = document.getElementById("doc-title");
+
+      // Prevent typing until connected
+      quill.disable();
+
+      // 5. Connect to FastAPI WebSocket
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const wsUrl = `${protocol}//${window.location.host}/ws/${docId}`;
+      const ws = new WebSocket(wsUrl);
+
+      // --- WEBSOCKET EVENT LISTENERS ---
+
+      ws.onopen = () => {
+        statusText.textContent = "Saved to server";
+        statusDot.classList.replace("bg-yellow-500", "bg-green-500");
+        statusPing.classList.replace("bg-yellow-400", "bg-green-400");
+        quill.enable();
+      };
+
+      ws.onclose = () => {
+        statusText.textContent = "Offline";
+        statusDot.classList.replace("bg-green-500", "bg-red-500");
+        statusPing.classList.add("hidden");
+        quill.disable();
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+
+          // Prevent self-broadcasts from re-triggering changes
+          if (payload.sender_id === clientId) {
+            return;
+          }
+
+          // 1. Initial Document State Hydration from MongoDB / Redis
+          if (payload.type === "init") {
+            if (payload.title && docTitleInput) {
+              docTitleInput.value = payload.title;
+              document.title = `${payload.title} - Docs Collab`;
+            }
+            if (payload.content && payload.content.ops && payload.content.ops.length > 0) {
+              quill.setContents(payload.content, "silent");
+            }
+            return;
+          }
+
+          // 2. Real-time Document Title Sync
+          if (payload.type === "title" && payload.title !== undefined) {
+            if (docTitleInput) {
+              docTitleInput.value = payload.title;
+              document.title = `${payload.title || "Untitled Document"} - Docs Collab`;
+            }
+            return;
+          }
+
+          // 3. Real-time Incremental Text Delta Sync
+          if (payload.type === "delta" && payload.delta) {
+            quill.updateContents(payload.delta, "api");
+          } else if (payload.delta) {
+            quill.updateContents(payload.delta, "api");
+          } else if (payload.ops) {
+            quill.updateContents(payload, "api");
+          }
+        } catch (error) {
+          console.error("Error processing incoming message:", error);
+        }
+      };
+
+      // --- TITLE INPUT LISTENER ---
+      if (docTitleInput) {
+        docTitleInput.addEventListener("input", (e) => {
+          const newTitle = e.target.value;
+          document.title = `${newTitle || "Untitled Document"} - Docs Collab`;
+          statusText.textContent = "Saving...";
+
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(
+              JSON.stringify({
+                type: "title",
+                sender_id: clientId,
+                title: newTitle,
+              })
+            );
+          }
+
+          setTimeout(() => {
+            if (ws.readyState === WebSocket.OPEN) {
+              statusText.textContent = "Saved to server";
+            }
+          }, 500);
+        });
+      }
+
+      // --- QUILL EVENT LISTENERS ---
+
+      quill.on("text-change", (delta, oldDelta, source) => {
+        if (source === "user") {
+          statusText.textContent = "Saving...";
+
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(
+              JSON.stringify({
+                type: "delta",
+                sender_id: clientId,
+                delta: delta,
+                full_content: quill.getContents(),
+              })
+            );
+          }
+
+          setTimeout(() => {
+            if (ws.readyState === WebSocket.OPEN) {
+              statusText.textContent = "Saved to server";
+            }
+          }, 500);
+        }
+      });
+
+      // Share Link Helper
+      function copyRoomLink() {
+        navigator.clipboard.writeText(window.location.href);
+        const toast = document.getElementById("toast");
+        toast.classList.remove("opacity-0", "pointer-events-none");
+        toast.classList.add("opacity-100");
+
+        const shareText = document.getElementById("share-text");
+        shareText.textContent = "Copied!";
+
+        setTimeout(() => {
+          toast.classList.remove("opacity-100");
+          toast.classList.add("opacity-0", "pointer-events-none");
+          shareText.textContent = "Share";
+        }, 2500);
+      }
+    </script>
+  </body>
+</html>

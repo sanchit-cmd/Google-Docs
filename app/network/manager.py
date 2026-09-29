@@ -11,7 +11,7 @@ class ConnectionManager:
     and coordinates Redis Pub/Sub listeners.
     """
 
-    def __init__(self, redis_client: redis.Redis):
+    def __init__(self, redis_client: redis.Redis | None = None):
         # Maps doc_id -> set of active local WebSocket connections
         self.active_connections: Dict[str, Set[WebSocket]] = {}
         # Tracks active Redis listener tasks per doc_id so we only run one per document per server
@@ -22,10 +22,11 @@ class ConnectionManager:
         await websocket.accept()
         if doc_id not in self.active_connections:
             self.active_connections[doc_id] = set()
-            # Start a Redis subscription listener for this document room
-            self.listener_tasks[doc_id] = asyncio.create_task(
-                self.redis_listener(doc_id)
-            )
+            # Start a Redis subscription listener for this document room if redis_client is set
+            if self.redis_client:
+                self.listener_tasks[doc_id] = asyncio.create_task(
+                    self.redis_listener(doc_id)
+                )
         self.active_connections[doc_id].add(websocket)
 
     def disconnect(self, doc_id: str, websocket: WebSocket):
@@ -42,7 +43,7 @@ class ConnectionManager:
         """Send a message to all WebSockets connected to this server for doc_id."""
         if doc_id in self.active_connections:
             dead_sockets = set()
-            for ws in self.active_connections[doc_id]:
+            for ws in list(self.active_connections[doc_id]):
                 try:
                     await ws.send_text(message)
                 except Exception:
@@ -56,6 +57,9 @@ class ConnectionManager:
         Subscribes to a Redis channel for a specific document.
         Whenever a message arrives from any server, broadcast it to local WebSockets.
         """
+        if not self.redis_client:
+            return
+
         pubsub = self.redis_client.pubsub()
         channel_name = f"doc:{doc_id}"
         await pubsub.subscribe(channel_name)

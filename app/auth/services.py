@@ -8,7 +8,7 @@ from auth.schemas import Token
 from core.settings import get_settings
 
 
-class UserService:
+class AuthService:
     def __init__(self, session):
         self.session = session
         self.settings = get_settings()
