@@ -7,7 +7,14 @@ class Settings(BaseSettings):
     REDIS_PORT: int = 6379
     REDIS_URL: str = f"redis://{REDIS_HOST}:{REDIS_PORT}"
 
-    DATABASE_URL: str = "sqlite:///./test.db"
+    POSTGRES_USER: str = "user"
+    POSTGRES_PASSWORD: str = "password"
+    POSTGRES_HOST: str = "localhost"
+    POSTGRES_PORT: int = 5432
+    POSTGRES_DB: str = "editor"
+    DATABASE_URL: str = (
+        f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}"
+    )
 
     MONGO_HOST: str = "localhost"
     MONGO_PORT: int = 27017
